@@ -1,0 +1,469 @@
+Skip to content
+ 
+Search or jump to…
+
+Pull requests
+Issues
+Marketplace
+Explore
+ @Bordotti Sign out
+1
+0 0 Bordotti/PythonProjects Private
+ Code  Issues 0  Pull requests 0  Projects 0  Insights  Settings
+PythonProjects/enriquecimento/Enriquecimento_banco.py
+142c326  3 days ago
+@Bordotti Bordotti novo
+We found a potential security vulnerability in one of your dependencies.
+Only the owner of this repository can see this message. 
+Manage your notification settings or learn more about vulnerability alerts.
+
+     
+441 lines (352 sloc)  14.3 KB
+'''
+		Arquivo de limpeza da base de enriquecimento
+		layout = CPF, CONTRATO, FAIXA tel1,tel2.....tel16
+'''
+
+import threading , csv
+import psycopg2 as postgres, pyodbc as sqlserver
+import time
+import numpy as np
+from multiprocessing.dummy import Pool
+import datetime
+import requests
+import os
+
+t1 = time.time()
+
+
+def consultaMapeamentoAbertos():
+	query = ("SELECT distinct id_cpf_cliente, id_agencia_fin+num_contrato, nom_cliente, contrato, id_grupo from contratos where id_situacao = 0 and contrato in ('%s')" % "', '".join(map(str, contratos) ))
+	cur2.execute(query)
+	return cur2.fetchall()
+
+def mapeamentoInicial():
+	query = ("SELECT DISTINCT  contrato, cobra, ID_cpf_cliente, contrato, ltrim(rtrim(nom_cliente)), ltrim(rtrim(telefone_ultimo_acionamento_com_o_cliente)) as telefone, atraso, data_do_ultimo_acionamento_com_o_cliente, resultado_do_ultimo_acionamento_com_o_cliente,tipo_acionamento,dsc_situacao,ltrim(rtrim(nom_grupo)),ltrim(rtrim(nom_carteira)),dsc_mod_cobranca,id_mod_cobranca FROM contratos WITH (NOLOCK)  WHERE id_situacao = 0 and contrato in('%s')" % "','".join(map(str, contratos)) )
+	cur2.execute(query)
+	map1 = cur2.fetchall()
+	
+	
+	try:
+		with open(path+'/r2/Mapeamento_inicial-ABERTOS'+ str(datetime.date.today()) + '.csv', 'w', newline='' ) as csvfileh:
+			telscad = csv.writer(csvfileh, delimiter=';', quoting=csv.QUOTE_ALL)
+			for i in mapeamento:
+				telscad.writerow(i)
+	except ValueError:
+		print("Erro de salvar Mapeamento Abertos")
+		
+	
+	return map1
+	
+def consultaTelsContrato():
+	'''
+	with open('teste1/Tels_cad.csv', 'r') as csvfile:
+		baseTel = list(csv.reader(csvfile, delimiter=';'))
+	print(len(baseTel))
+	if (len(baseTel) > 0):
+		for result in baseTel:
+			ttels.append(result)
+	return ttels
+		'''
+	query = ("SELECT distinct ltrim(rtrim(num_ddd))+ltrim(rtrim(num_fone)) from Financiamentos f inner join telefones t on t.id_cpf_cliente = f.id_cpf_cliente where  num_contrato_emp in ('%s')" % "', '".join(map(str, contratos) ))
+	cur2.execute(query)
+	results =  cur2.fetchall()
+	if (len(results) > 0):
+		for result in results:
+			if(len(result[0])) > 0:
+				if(result[0].isnumeric()):
+					ttels.append(result[0])
+	print("consultado telefones", len(ttels))
+	
+	
+	try:
+		with open(path+'//r2/telefones_CAD-'+ data +'.csv', 'w', newline='' ) as csvfile22:
+			telscad = csv.writer(csvfile22, delimiter=';', quoting=csv.QUOTE_ALL)
+			for i in results:
+				telscad.writerow(i)
+	except ValueError:
+		print("Erro de salvar Telefones_Cadastrados")
+	
+	query2 = ("SELECT distinct f.id_cpf_cliente, f.num_contrato_emp from Financiamentos f  where  num_contrato_emp in ('%s')" % "', '".join(map(str, contratos) ))
+	cur2.execute(query2)
+	results2 =  cur2.fetchall()
+	if (len(results) > 0):
+		for result in results2:
+			cpfs.append(result[0])
+	print("Consultado CPFS: %s"% len(cpfs))
+	'''try:
+		with open('./result/telefones_CAD-'+ str(datetime.date.today()) + 'v22.csv', 'w', newline='' ) as csvfile22:
+			telscad = csv.writer(csvfile22, delimiter=';', quoting=csv.QUOTE_ALL)
+			for i in range(len(ttels)):
+				telscad.writerow(ttels)
+	except ValueError:
+		print("Erro de salvar Telefones_Cadastrados")
+	'''
+	return ttels
+
+def consultaTels():
+	'''
+	with open('teste1/Tels_cad.csv', 'r') as csvfile:
+		baseTel = list(csv.reader(csvfile, delimiter=';'))
+	print(len(baseTel))
+	if (len(baseTel) > 0):
+		for result in baseTel:
+			ttels.append(result)
+	return ttels
+		'''
+	query = ("SELECT distinct ltrim(rtrim(num_ddd))+ltrim(rtrim(num_fone)) from telefones t where id_cpf_cliente in ('%s')" % "', '".join(map(str, cpfs) ))
+	cur2.execute(query)
+	results =  cur2.fetchall()
+	if (len(results) > 0):
+		for result in results:
+			if(result[0].isnumeric()):
+				ttels.append(int(result[0]))
+			
+	try:
+		with open(path+'/r2/telefones_CAD-'+ str(datetime.date.today()) + '.csv', 'w', newline='' ) as csvfile22:
+			telscad = csv.writer(csvfile22, delimiter=';', quoting=csv.QUOTE_ALL)
+			for i in results:
+				telscad.writerow(i)
+	except ValueError:
+		print("Erro de salvar Telefones_Cadastrados")
+		
+	return ttels
+
+'''	
+	with open('./result/telsCAD_2018-10-10.csv', 'r') as csvfile2:
+		baseCad = list(csv.reader(csvfile2, delimiter=';'))
+	return baseCad
+	
+	
+def consultaCPC():
+	query = ("SELECT * FROM CrespoCairesMis.DBO.Vw_ZDiscador_Valida_Cpc Where  1=1 And Num_Contrato_Emp In ('%s')" % "', '".join(map(str,contratos)))
+	cur2.execute(query)
+	with open('./result/telefones_Novos_'+ str(datetime.date.today()) + '.csv', 'w', newline='' ) as csvfile3:
+		todoTelsNovos = csv.writer(csvfile3, delimiter=';', quoting=csv.QUOTE_ALL)
+		for row3 in telsNovos:
+			todoTelsNovos.writerow(row3)
+'''	
+
+def consultaTelsNovos(teles): # CRUZAMENTO DE DADOS PARA TELEFONES NOVOS
+	for i in range(3, len(teles)):
+		if (len(teles[i])) > 0:
+			if(teles[i].isnumeric()):
+				if((teles[i][0] == "0") or (teles[i][0] == 0)):
+					if teles[i][1:] not in ttels:
+						if(len(teles[i][1:]) == 10):							
+							telsNovos.append([teles[1], "", teles[i][1:], "", teles[0], '01', header[i], "01" ])							
+						else:
+							telsNovos.append([teles[1], "", teles[i][1:], "",  teles[0], '03', header[i], "01" ])
+				else:
+					if teles[i] not in ttels:
+						if(len(teles[i]) == 10):
+							telsNovos.append([teles[1], "", teles[i][1:], "", teles[0], '01', header[i], "01" ])
+						telsNovos.append([teles[0], teles[i], header[i], teles[1]])
+						
+'''		
+					#x = ("sem zero", i, teles[i], teles[i][0])
+					#print(str(len(telsNovos)) + "- Num: " + str(teles[i][1:])  )	
+					#x = ("com zero",i, teles[i], teles[i][0])
+					
+		if(len(teles[0]) > 0):
+								for j in cpfs:
+									if(teles[1] == j[1]):
+										telsNovos.append([teles[1], "", teles[i][1:], "", j[0], '01', header[i], "01" ])	
+							else:
+							
+		if(len(teles[0]) > 0):
+								for j in cpfs:
+									if(teles[1] == j[1]):
+										telsNovos.append([teles[1], "", teles[i][1:], "", j[0], '03', header[i], "01" ])
+							else:
+					
+					
+		if(teles[i][0] == 0):
+				if teles[i] not in tt:
+					telsNovos.append([teles[0], teles[i], header[i], teles[1]])
+					#print("sem zero", i, teles[i])
+					
+			else:
+				if teles[i][1:] not in tt:
+					telsNovos.append([teles[0], teles[i][1:], header[i], teles[1]])
+					#print(str(len(telsNovos)) + "- Num: " + str(teles[i][1:])  )	
+					#print("com zero",i, teles[i])
+			
+			if teles[i][0] == 0:		
+			else:
+				if teles[i] not in tt:
+					telsNovos.append([teles[0], teles[i][1:], header[i], teles[1] ])
+					print(str(len(telsNovos)) + "- Num sem zero: " + str(teles[i][1:])  )	
+					#print()
+'''	
+
+def telsContAbertos(tNov):
+	
+	for i in mapeamento:
+		
+		if tNov[3] == i[0]:
+			
+			#telsContAbertos.append(i[1],str(i[1])+'/'+str(i[4]), i[4], i[3][0:2], i[3][2:])
+			if(i[6] < 15):
+				pass
+			elif(i[12] == 'RENAUT'):
+				telsTotalip.append([i[1],str(i[1])+'/'+str(i[4]), i[4], i[3][0:2], i[3][2:], 'RCI' ])
+			elif(i[13] == 'PREJUIZO'):
+				telsTotalip.append([i[1],str(i[1])+'/'+str(i[4]), i[4], i[3][0:2], i[3][2:], 'PREJUIZO' ])
+			elif(i[6] > 15 and i[6] < 91):
+				telsTotalip.append([i[1],str(i[1])+'/'+str(i[4]), i[4], i[3][0:2], i[3][2:], 'IRREGULAR' ])
+			elif(i[6] < 181):
+				telsTotalip.append([i[1],str(i[1])+'/'+str(i[4]), i[4], i[3][0:2], i[3][2:], 'M1' ])
+			elif(i[6] < 361):
+				telsTotalip.append([i[1],str(i[1])+'/'+str(i[4]), i[4], i[3][0:2], i[3][2:], 'M2' ])
+			else:
+				telsTotalip.append([i[1],str(i[1])+'/'+str(i[4]), i[4], i[3][0:2], i[3][2:], 'PREJUIZO' ])
+			
+def criaArquivos():
+
+	try:
+		with open('./r2/telefones_Novos_'+ data + '.csv', 'w', newline='' ) as csvfile3:
+			todoTelsNovos = csv.writer(csvfile3, delimiter=';', quoting=csv.QUOTE_ALL)
+			for row3 in telsNovos:
+				todoTelsNovos.writerow(row3)		
+	except ValueError:
+		print("Erro de salvar Telefones_NOVOS")
+
+	try:
+		with open('./r2/URA_'+ data + '.csv', 'w', newline='' ) as csvfile3:
+			todoTelsNovos = csv.writer(csvfile3, delimiter=';', quoting=csv.QUOTE_ALL)
+			for row3 in telsTotalip:
+				todoTelsNovos.writerow(row3)		
+	except ValueError:
+		print("Erro de salvar Telefones_NOVOS")
+	
+		
+	try:
+		with open('./r2/abertos_'+ data + 'v2.csv', 'w', newline='') as csvfile:
+			contratos = csv.writer(csvfile, delimiter=';', quoting=csv.QUOTE_ALL)
+			for row in abertos:
+				contratos.writerow(row)
+	except ValueError:
+		print("Erro de salvar Abertos")
+	
+
+def fechaConexoes():
+	conn.close()
+	conn2.close()
+		
+def direcionarUra(dadosTotalip):#Filtra e direciona os clientes para as uras e ativa ura
+	
+	
+	if dadosTotalip[5] == 'IRREGULAR':
+		importarTotalip(402, dadosTotalip)
+		irregSign = 1
+	elif dadosTotalip[5] == 'M1':
+		importarTotalip(387, dadosTotalip)
+		m1Sing = 1
+	elif dadosTotalip[5] == 'M2':
+		importarTotalip(389, dadosTotalip)
+		m2Sing = 1
+	elif dadosTotalip[5] == 'RCI':
+		importarTotalip(254, dadosTotalip)
+		rciSign = 1
+
+	'''
+	IRREGULAR - 402
+	M1 - 387
+	M2 - 389
+	RCI - 254
+	'''
+	
+	#requets.post(http://192.168.2.18/api/gerenciar_campanha?campanha_id=50) @@@@ EXEMPLO  @@@@@@
+	
+	
+def importarTotalip(idCampanha, cliente):# qUERy pARA iMPORTaR dISCADOR
+	query = ("insert into importar_discador(id_campanha, identificador1, identificador2, ddd1, telefone1) values ({4}, {0}, {1}, {2}, {3} )".format(cliente[0], cliente[1], cliente[2], cliente[3], idCampanha ))
+	cur1.execute(query)
+	print(query)
+	#	fim Importacao
+
+def ativaCampanhas(sign):
+
+	if(irregSign = 1):
+		requets.post('http://192.168.2.18/api/gerenciar_campanha?campanha_id=402')
+	if(m1Sing = 1):
+		requets.post('http://192.168.2.18/api/gerenciar_campanha?campanha_id=387')
+	if(m2Sing = 1):
+		requets.post('http://192.168.2.18/api/gerenciar_campanha?campanha_id=389')
+	if(rciSign = 1):
+		requets.post('http://192.168.2.18/api/gerenciar_campanha?campanha_id=254')
+	
+	'''
+	requets.post('http://192.168.2.18/api/gerenciar_campanha?campanha_id=402')
+	requets.post('http://192.168.2.18/api/gerenciar_campanha?campanha_id=387')
+	requets.post('http://192.168.2.18/api/gerenciar_campanha?campanha_id=389')
+	requets.post('http://192.168.2.18/api/gerenciar_campanha?campanha_id=254')
+	'''
+
+# INICIO DA PROGRAMACAO
+# Conexão totalip
+try:
+	conn = postgres.connect("host=192.168.2.20 dbname=totalipdb user=integracao password=''")
+	cur1 = conn.cursor()
+except ValueError:
+	print("ERRO: Conexão Totalip Falhou")
+		
+#Conexão tesis
+try:		
+	conn2 = sqlserver.connect("DRIVER={SQL Server}; SERVER=192.168.2.22; DATABASE=tesis; UID=consulta; PWD=crespo123*")
+	cur2 = conn2.cursor()
+except ValueError:
+	print("ERRO: Conexão Tesis Falhou")
+
+
+# Caminho do arquivo
+# 'C:/Users/cc1706/Desktop/save/Enriquecimento VAREJO/ddmmaa/Crespo.csv' 
+# 'C:/Users/cc1706/Desktop/save/Enriquecimento FINANCEIRA/ddmmaa/Crespo.csv'
+
+path = 'C:/Users/cc1706/Desktop/Temp/040219'
+data = str(datetime.date.today())
+
+os.chdir(path)
+
+if ('r2' not in os.listdir()):
+	os.mkdir('r2')
+
+
+with open('Crespo.csv', 'r') as csvfile:
+	baseTel = list(csv.reader(csvfile, delimiter=';'))
+
+cpfs = []
+contratos = []
+header = baseTel[0]
+ttels =[]
+mapeamento = []
+mapeamento2 = []
+telsNovos = []
+telsUra = []
+dadosClienteUra = []
+telsTotalip = []
+
+
+mapeamento = mapeamentoInicial()
+
+# Transforma os cpfs e contratos em lista
+if(len(baseTel[2][0]) == 0):
+	print ("consulta por contrato")
+	for i in range(1,len(baseTel)):
+		if(len(baseTel[i][1]) > 0):
+			contratos.append(baseTel[i][1])
+	consultaTelsContrato()
+else:
+	if(len(baseTel[2][0]) == 15):
+		for i in range(1,len(baseTel)):
+			if(len(baseTel[i][1]) > 0):
+				cpfs.append(baseTel[i][0][1:])
+				contratos.append(baseTel[i][1])
+	else:
+		for i in range(1,len(baseTel)):
+			if(len(baseTel[i][1]) > 0):
+				cpfs.append(baseTel[i][0])
+				contratos.append(baseTel[i][1])
+		
+	consultaTelsContrato()
+	
+	
+	'''print ("consulta cpf")
+	if(len(baseTel[2][0]) == 15):
+		for i in range(1,len(baseTel)):
+			if(len(baseTel[i][1]) > 0):
+				cpfs.append(baseTel[i][0][1:])
+				contratos.append(baseTel[i][1])
+	else:
+		for i in range(1,len(baseTel)):
+			if(len(baseTel[i][1]) > 0):
+				cpfs.append(baseTel[i][0])
+				contratos.append(baseTel[i][1])
+	consultaTels()
+	'''
+
+		
+print(len(contratos))	
+mapeamento, mapeamento2 = mapeamentoInicial()
+
+abertos = consultaMapeamentoAbertos()
+print("Length tels Cad: " , len(ttels))
+
+print("Tempo Consultas: " + str(time.time()-t1))
+
+p = Pool(28)
+p.map(consultaTelsNovos, baseTel)
+
+print("Tempo batimento Tels: " + str(time.time()-t1))
+time.sleep(1.52)
+p.map(telsContAbertos, telsNovos)
+
+print("Qtd Numeros Novos: " + str(len(telsNovos)))
+print("Qtd Numeros Novos de Contratos Abertos: " + str(len(telsTotalip)))
+
+criaArquivos()
+
+irregSign = 0
+m1Sing = 0
+m2Sing = 0
+rciSign = 0
+
+#direcionarUra()
+#fechaConexoes()
+	
+	
+'''
+#print ('Ddd' + str (lista2[1][1])[0:2] + ' tel:' + str (lista2[1][1])[2:])
+#print("Hello World '%14s'" % "','".join (map (str, cpfs)))
+disc = []
+for i in range(len(todoTelsNovos)):
+	if todoTelsNovos[4] == 'IRREGULAR':
+		query = ("insert into importar_discador(id_campanha, identificador1, identificador2, ddd1, telefone1) values (402, '33838', '2939/hjoiasjdoa', 19, 997651072)")
+		cur1.execute(query)
+	if todoTelsNovos[4] == 'IRREGULAR':
+		query = ("insert into importar_discador(id_campanha, identificador1, identificador2, ddd1, telefone1) values (387, '33838', '2939/hjoiasjdoa', 19, 997651072)")
+		cur1.execute(query)
+	IRREGULAR - 402
+	M1 - 387
+	M2 - 389
+	RCI - 254
+	
+	
+	requets.post(http://192.168.0.1/api/gerenciar_campanha?campanha_id=50) @@@@ EXEMPLO  @@@@@@
+	http://192.168.0.1/api/gerenciar_campanha?campanha_id=402
+	http://192.168.0.1/api/gerenciar_campanha?campanha_id=387
+	http://192.168.0.1/api/gerenciar_campanha?campanha_id=389
+	http://192.168.0.1/api/gerenciar_campanha?campanha_id=254
+   for j in range (len (lista2)):
+        disc[0] = i
+        disc[1] = 'cobra/nome'
+        disc[2] = 'x'
+        disc[3] = str(lista2 [i][j])[0:2]
+        disc[4] = str(lista2 [i][j])[2:]
+  
+'''  
+	
+		
+		#insert into importar_discador(id_campanha, identificador1, identificador2, ddd1, telefone1, ddd2, telefone2, ddd3, telefone3, ddd4, telefone4, ddd5, telefone5, ddd6, telefone6, ddd7, telefone7, ddd8, telefone8, ddd9, telefone9, ddd10, telefone10, ddd11, telefone11, ddd12, telefone12,  ddd13, telefone13) 
+		#values(419, '33838', '2939/hjoiasjdoa', 19, 997651072, 19, 971727808, , , , , , , , , , , , , , , , , , , )
+
+			
+fechaConexoes()
+print("Tempo Total: " + str(time.time()-t1))
+© 2019 GitHub, Inc.
+Terms
+Privacy
+Security
+Status
+Help
+Contact GitHub
+Pricing
+API
+Training
+Blog
+About
+Press h to open a hovercard with more details.
